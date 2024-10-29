@@ -4,17 +4,25 @@ import {generateTokens, setCookies} from "../lib/auth.utils.js";
 
 const clientUrl = process.env.CLIENT_URL;
 
+// dang ky thong thuong
 export const signup = async (req, res) => {
 	const { email, password, name } = req.body;
 	try {
+		// Kiểm tra xem người dùng đã tồn tại trong DB chưa
 		const userExists = await User.findOne({ email });
 
 		if (userExists) {
+			// Kiểm tra xem user đã đăng nhập bằng Google chưa
+			if (userExists.googleId) {
+				return res.status(400).json({ message: "This email is already registered with Google. Please use a different email." });
+			}
 			return res.status(400).json({ message: "User already exists" });
 		}
+
+		// Nếu chưa tồn tại, tạo người dùng mới
 		const user = await User.create({ name, email, password });
 
-		// authenticate
+		// Authenticate
 		const { accessToken, refreshToken } = generateTokens(user._id);
 		setCookies(res, accessToken, refreshToken);
 
@@ -30,21 +38,33 @@ export const signup = async (req, res) => {
 	}
 };
 
+
+// login thông thuong
 export const login = async (req, res) => {
 	try {
 		const { email, password } = req.body;
 		const user = await User.findOne({ email });
 
-		if (user && (await user.comparePassword(password))) {
-			const { accessToken, refreshToken } = generateTokens(user._id);
-			setCookies(res, accessToken, refreshToken);
+		if (user) {
+			// Kiểm tra xem người dùng đã đăng nhập bằng Google chưa
+			if (user.googleId) {
+				return res.status(400).json({ message: "This email is registered with Google. Please use Google login." });
+			}
 
-			res.json({
-				_id: user._id,
-				name: user.name,
-				email: user.email,
-				role: user.role,
-			});
+			// Kiểm tra mật khẩu
+			if (await user.comparePassword(password)) {
+				const { accessToken, refreshToken } = generateTokens(user._id);
+				setCookies(res, accessToken, refreshToken);
+
+				res.json({
+					_id: user._id,
+					name: user.name,
+					email: user.email,
+					role: user.role,
+				});
+			} else {
+				res.status(400).json({ message: "Invalid email or password" });
+			}
 		} else {
 			res.status(400).json({ message: "Invalid email or password" });
 		}
@@ -53,6 +73,7 @@ export const login = async (req, res) => {
 		res.status(500).json({ message: error.message });
 	}
 };
+
 
 // this will refresh the access token
 export const refreshToken = async (req, res) => {
