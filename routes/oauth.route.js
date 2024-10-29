@@ -1,7 +1,7 @@
 import express from 'express';
 import dotenv from 'dotenv';
 import { OAuth2Client } from 'google-auth-library';
-import {generateTokens, setCookies} from "../lib/auth.utils.js";
+import { generateTokens, setCookies } from "../lib/auth.utils.js";
 import User from "../models/user.model.js"; // Giả sử bạn có model User ở đây
 dotenv.config({ path: `.env.${process.env.NODE_ENV}` });
 
@@ -19,7 +19,7 @@ router.get('/', async function(req, res, next) {
 
     console.log("code>>>>>>>", code);
     try {
-        const redirectURL = "http://127.0.0.1:5000/api/oauth"
+        const redirectURL = "http://127.0.0.1:5000/api/oauth";
         const oAuth2Client = new OAuth2Client(
             process.env.GOOGLE_CLIENT_ID,
             process.env.GOOGLE_CLIENT_SECRET,
@@ -34,30 +34,34 @@ router.get('/', async function(req, res, next) {
 
         // Lấy thông tin người dùng từ Google
         const userData = await getUserData(user.access_token);
-        const { email, name } = userData;
+        const { email, name, sub: googleId } = userData; // Lấy googleId từ sub
 
         // Kiểm tra xem người dùng đã tồn tại trong DB chưa
         let existingUser = await User.findOne({ email });
         if (!existingUser) {
-            // Nếu chưa tồn tại, tạo người dùng mới
-            existingUser = await User.create({ email, name }); // Không lưu password
+            // Nếu chưa tồn tại, tạo người dùng mới mà không cần password
+            existingUser = await User.create({ email, name, googleId }); // Không lưu password
         }
 
-        // Có thể tạo JWT hoặc thực hiện các thao tác khác với existingUser ở đây
-        const { accessToken, refreshToken } = generateTokens(user._id);
+        // Tạo JWT hoặc thực hiện các thao tác khác với existingUser ở đây
+        const { accessToken, refreshToken } = generateTokens(existingUser._id); // Đảm bảo sử dụng existingUser._id
         setCookies(res, accessToken, refreshToken);
-        res.json({
-            _id: user._id,
-            name: user.name,
-            email: user.email,
-            role: user.role,
+
+        // Gửi phản hồi JSON
+        return res.json({
+            _id: existingUser._id,
+            name: existingUser.name,
+            email: existingUser.email,
+            role: existingUser.role, // Có thể cần xác định role của người dùng
         });
 
     } catch (err) {
         console.log('Error logging in with OAuth2 user', err);
+        return res.status(500).json({ message: 'Internal server error' }); // Gửi thông báo lỗi nếu có
     }
 
-    res.redirect(303, 'http://localhost:5173/');
+    // Chỉ gọi res.redirect nếu bạn không gửi JSON
+    // res.redirect(303, 'http://localhost:5173/');
 });
 
 // Route để lấy URL đăng nhập Google
@@ -75,7 +79,11 @@ router.post('/google/login', async function(req, res, next) {
 
     const authorizeUrl = oAuth2Client.generateAuthUrl({
         access_type: 'offline',
-        scope: 'https://www.googleapis.com/auth/userinfo.profile openid',
+        scope: [
+            'https://www.googleapis.com/auth/userinfo.profile',
+            'https://www.googleapis.com/auth/userinfo.email',
+            'openid'
+        ],
         prompt: 'consent'
     });
 
