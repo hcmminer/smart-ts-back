@@ -1,7 +1,6 @@
 import User from "../models/user.model.js";
 import jwt from "jsonwebtoken";
 import {generateTokens, setCookies} from "../lib/auth.utils.js";
-import passport from "passport";
 
 const clientUrl = process.env.CLIENT_URL;
 
@@ -82,71 +81,14 @@ export const refreshToken = async (req, res) => {
 };
 
 export const getProfile = async (req, res) => {
-	try {
-		res.json(req.user);
-	} catch (error) {
-		res.status(500).json({ message: "Server error", error: error.message });
+	if (req.isAuthenticated()) {
+		res.json(req.user); // Trả về thông tin người dùng nếu đã xác thực
+	} else {
+		res.status(401).json({ message: "Unauthorized" }); // Trả về lỗi nếu chưa xác thực
 	}
 };
 
-// Handle Google Auth Success (Login or Registration)
-export const handleGoogleAuthSuccess = async (req, res) => {
-	try {
-		const user = req.user;
 
-		if (!user) {
-			return res.status(400).json({ message: "User not found" });
-		}
-
-		let existingUser = await User.findOne({ email: user.email });
-
-		if (!existingUser) {
-			existingUser = new User({
-				name: user.name,
-				email: user.email,
-				image: user.image,
-			});
-			await existingUser.save();
-		}
-
-		const { accessToken, refreshToken } = generateTokens(existingUser._id);
-		setCookies(res, accessToken, refreshToken);
-
-		res.status(200).json({
-			_id: existingUser._id,
-			name: existingUser.name,
-			email: existingUser.email,
-			role: existingUser.role,
-			image: existingUser.image,
-		});
-	} catch (error) {
-		console.error("Error in handleGoogleAuthSuccess controller:", error.message);
-		res.status(500).json({ message: "Internal server error" });
-	}
-};
-
-// Start Google Auth process
-export const googleAuth = (req, res, next) => {
-	passport.authenticate("google", { scope: ["profile", "email"] })(req, res, next);
-};
-
-// Google Auth Callback
-export const googleAuthCallback = async (req, res) => {
-	passport.authenticate("google", async (err, user) => {
-		if (err) {
-			return res.redirect(`${clientUrl}/login`); // Redirect if error
-		}
-
-		if (!user) {
-			return res.redirect(`${clientUrl}/login`); // Redirect if no user
-		}
-
-		const { accessToken, refreshToken } = generateTokens(user._id);
-		setCookies(res, accessToken, refreshToken);
-
-		res.redirect(`${clientUrl}`); // Redirect after login
-	})(req, res);
-};
 
 // Logout API
 export const logout = (req, res) => {
