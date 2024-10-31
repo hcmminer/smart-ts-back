@@ -10,16 +10,15 @@ const router = express.Router();
 async function getUserData(access_token) {
     const response = await fetch(`https://www.googleapis.com/oauth2/v3/userinfo?access_token=${access_token}`);
     const data = await response.json();
-    return data; // Trả về data để sử dụng
+    return data;
 }
 
-/* GET home page. */
-router.get('/', async function(req, res, next) {
+
+router.get('/callback', async function(req, res, next) {
     const code = req.query.code;
 
-    console.log("code>>>>>>>", code);
     try {
-        const redirectURL = "http://127.0.0.1:5000/api/oauth";
+        const redirectURL = "http://127.0.0.1:5000/api/oauth/callback";
         const oAuth2Client = new OAuth2Client(
             process.env.GOOGLE_CLIENT_ID,
             process.env.GOOGLE_CLIENT_SECRET,
@@ -30,7 +29,7 @@ router.get('/', async function(req, res, next) {
         console.info('Tokens acquired.');
 
         const user = oAuth2Client.credentials;
-        console.log('credentials', user);
+        console.log('credentials>>', user);
 
         // Lấy thông tin người dùng từ Google
         const userData = await getUserData(user.access_token);
@@ -47,21 +46,15 @@ router.get('/', async function(req, res, next) {
         const { accessToken, refreshToken } = generateTokens(existingUser._id); // Đảm bảo sử dụng existingUser._id
         setCookies(res, accessToken, refreshToken);
 
-        // Gửi phản hồi JSON
-        return res.json({
-            _id: existingUser._id,
-            name: existingUser.name,
-            email: existingUser.email,
-            role: existingUser.role, // Có thể cần xác định role của người dùng
-        });
+        // Redirect về frontend kèm theo thông tin cần thiết
+        res.redirect(`http://localhost:5173/dashboard?email=${encodeURIComponent(email)}&name=${encodeURIComponent(name)}`);
 
-    } catch (err) {
-        console.log('Error logging in with OAuth2 user', err);
-        return res.status(500).json({ message: 'Internal server error' }); // Gửi thông báo lỗi nếu có
+    } catch (error) {
+        console.error("Error during Google callback", error);
+        res.status(500).json({ message: "Internal Server Error" });
     }
 
-    // Chỉ gọi res.redirect nếu bạn không gửi JSON
-    // res.redirect(303, 'http://localhost:5173/');
+
 });
 
 // Route để lấy URL đăng nhập Google
@@ -69,7 +62,7 @@ router.post('/google/login', async function(req, res, next) {
     res.header("Access-Control-Allow-Origin", 'http://localhost:5173');
     res.header("Access-Control-Allow-Credentials", 'true');
     res.header("Referrer-Policy", "no-referrer-when-downgrade");
-    const redirectURL = 'http://127.0.0.1:5000/api/oauth';
+    const redirectURL = 'http://127.0.0.1:5000/api/oauth/callback';
 
     const oAuth2Client = new OAuth2Client(
         process.env.GOOGLE_CLIENT_ID,
