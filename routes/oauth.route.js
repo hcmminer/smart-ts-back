@@ -1,7 +1,7 @@
 import express from 'express';
 import dotenv from 'dotenv';
-import { OAuth2Client } from 'google-auth-library';
-import { generateTokens, setCookies } from "../lib/auth.utils.js";
+import {OAuth2Client} from 'google-auth-library';
+import {generateTokens} from "../lib/auth.utils.js";
 import User from "../models/user.model.js"; // Giả sử bạn có model User ở đây
 dotenv.config({ path: `.env.${process.env.NODE_ENV}` });
 
@@ -9,8 +9,7 @@ const router = express.Router();
 
 async function getUserData(access_token) {
     const response = await fetch(`https://www.googleapis.com/oauth2/v3/userinfo?access_token=${access_token}`);
-    const data = await response.json();
-    return data;
+    return await response.json();
 }
 
 
@@ -29,7 +28,6 @@ router.get('/callback', async function(req, res, next) {
         console.info('Tokens acquired.');
 
         const user = oAuth2Client.credentials;
-        console.log('credentials>>', user);
 
         // Lấy thông tin người dùng từ Google
         const userData = await getUserData(user.access_token);
@@ -44,11 +42,9 @@ router.get('/callback', async function(req, res, next) {
 
         // Tạo JWT hoặc thực hiện các thao tác khác với existingUser ở đây
         const { accessToken, refreshToken } = generateTokens(existingUser._id); // Đảm bảo sử dụng existingUser._id
-        setCookies(res, accessToken, refreshToken);
 
         // Redirect về frontend kèm theo thông tin cần thiết
-        res.redirect(`http://localhost:5173/dashboard?email=${encodeURIComponent(email)}&name=${encodeURIComponent(name)}`);
-
+        res.redirect(`http://localhost:5173/dashboard?accessToken=${encodeURIComponent(accessToken)}&refreshToken=${encodeURIComponent(refreshToken)}`);
     } catch (error) {
         console.error("Error during Google callback", error);
         res.status(500).json({ message: "Internal Server Error" });

@@ -1,30 +1,26 @@
 import User from "../models/user.model.js";
 import jwt from "jsonwebtoken";
-import {generateTokens, setCookies} from "../lib/auth.utils.js";
+import { generateTokens } from "../lib/auth.utils.js";
 
-const clientUrl = process.env.CLIENT_URL;
-
-// dang ky thong thuong
+// Đăng ký thông thường
 export const signup = async (req, res) => {
 	const { email, password, name } = req.body;
 	try {
-		// Kiểm tra xem người dùng đã tồn tại trong DB chưa
 		const userExists = await User.findOne({ email });
 
 		if (userExists) {
-			// Kiểm tra xem user đã đăng nhập bằng Google chưa
 			if (userExists.googleId) {
 				return res.status(400).json({ message: "This email is already registered with Google. Please use a different email." });
 			}
 			return res.status(400).json({ message: "User already exists" });
 		}
 
-		// Nếu chưa tồn tại, tạo người dùng mới
 		const user = await User.create({ name, email, password });
-
-		// Authenticate
 		const { accessToken, refreshToken } = generateTokens(user._id);
-		setCookies(res, accessToken, refreshToken);
+
+		// Đặt các token trong header
+		res.setHeader("Authorization", `Bearer ${accessToken}`);
+		res.setHeader("x-refresh-token", refreshToken);
 
 		res.status(201).json({
 			_id: user._id,
@@ -38,23 +34,23 @@ export const signup = async (req, res) => {
 	}
 };
 
-
-// login thông thuong
+// Đăng nhập thông thường
 export const login = async (req, res) => {
 	try {
 		const { email, password } = req.body;
 		const user = await User.findOne({ email });
 
 		if (user) {
-			// Kiểm tra xem người dùng đã đăng nhập bằng Google chưa
 			if (user.googleId) {
 				return res.status(400).json({ message: "This email is registered with Google. Please use Google login." });
 			}
 
-			// Kiểm tra mật khẩu
 			if (await user.comparePassword(password)) {
 				const { accessToken, refreshToken } = generateTokens(user._id);
-				setCookies(res, accessToken, refreshToken);
+
+				// Đặt các token trong header
+				res.setHeader("Authorization", `Bearer ${accessToken}`);
+				res.setHeader("x-refresh-token", refreshToken);
 
 				res.json({
 					_id: user._id,
@@ -74,25 +70,20 @@ export const login = async (req, res) => {
 	}
 };
 
-
-// this will refresh the access token
+// Làm mới token
 export const refreshToken = async (req, res) => {
 	try {
-		const refreshToken = req.cookies.refreshToken;
+		const { refreshToken } = req.headers;
 
 		if (!refreshToken) {
 			return res.status(401).json({ message: "No refresh token provided" });
 		}
 
 		const decoded = jwt.verify(refreshToken, process.env.REFRESH_TOKEN_SECRET);
-		const accessToken = jwt.sign({ userId: decoded.userId }, process.env.ACCESS_TOKEN_SECRET, { expiresIn: "15m" });
+		const newAccessToken = jwt.sign({ userId: decoded.userId }, process.env.ACCESS_TOKEN_SECRET, { expiresIn: "15m" });
 
-		res.cookie("accessToken", accessToken, {
-			httpOnly: true,
-			secure: process.env.NODE_ENV === "production",
-			sameSite: "strict",
-			maxAge: 15 * 60 * 1000,
-		});
+		// Đặt access token mới trong header
+		res.setHeader("Authorization", `Bearer ${newAccessToken}`);
 
 		res.json({ message: "Token refreshed successfully" });
 	} catch (error) {
@@ -102,34 +93,16 @@ export const refreshToken = async (req, res) => {
 };
 
 export const getProfile = async (req, res) => {
-	if (req.isAuthenticated()) {
+	if (req.user) { // Kiểm tra nếu đã có thông tin người dùng từ middleware
 		res.json(req.user); // Trả về thông tin người dùng nếu đã xác thực
 	} else {
 		res.status(401).json({ message: "Unauthorized" }); // Trả về lỗi nếu chưa xác thực
 	}
 };
 
-
-
-// Logout API
+// Đăng xuất
 export const logout = (req, res) => {
 	try {
-		// Xóa accessToken
-		res.clearCookie("accessToken", {
-			httpOnly: true,
-			secure: process.env.NODE_ENV === "production",
-			sameSite: "strict",
-			path: "/", // Ensure the same path as when it was set
-		});
-
-		// Xóa refreshToken
-		res.clearCookie("refreshToken", {
-			httpOnly: true,
-			secure: process.env.NODE_ENV === "production",
-			sameSite: "strict",
-			path: "/", // Ensure the same path as when it was set
-		});
-
 		res.status(200).json({ message: "Logged out successfully" });
 	} catch (error) {
 		console.error("Error during logout:", error.message);
