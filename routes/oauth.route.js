@@ -31,17 +31,17 @@ router.get('/callback', async function(req, res, next) {
 
         // Lấy thông tin người dùng từ Google
         const userData = await getUserData(user.access_token);
-        const { email, name, sub: googleId } = userData; // Lấy googleId từ sub
+        const { email, name, sub: googleId, picture: image } = userData; // Lấy googleId từ sub
 
         // Kiểm tra xem người dùng đã tồn tại trong DB chưa
         let existingUser = await User.findOne({ email });
         if (!existingUser) {
             // Nếu chưa tồn tại, tạo người dùng mới mà không cần password
-            existingUser = await User.create({ email, name, googleId }); // Không lưu password
+            existingUser = await User.create({ email, name, googleId, image }); // Không lưu password
         }
 
         // Tạo JWT hoặc thực hiện các thao tác khác với existingUser ở đây
-        const { accessToken, refreshToken } = generateTokens(existingUser._id); // Đảm bảo sử dụng existingUser._id
+        const { accessToken, refreshToken } = generateTokens(existingUser); // Đảm bảo sử dụng existingUser._id
 
         // Redirect về frontend kèm theo thông tin cần thiết
         res.redirect(`http://localhost:5173/dashboard?accessToken=${encodeURIComponent(accessToken)}&refreshToken=${encodeURIComponent(refreshToken)}`);

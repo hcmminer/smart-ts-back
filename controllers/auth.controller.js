@@ -16,7 +16,7 @@ export const signup = async (req, res) => {
 		}
 
 		const user = await User.create({ name, email, password });
-		const { accessToken, refreshToken } = generateTokens(user._id);
+		const { accessToken, refreshToken } = generateTokens(user);
 
 		// Đặt các token trong header
 		res.setHeader("Authorization", `Bearer ${accessToken}`);
@@ -46,7 +46,7 @@ export const login = async (req, res) => {
 			}
 
 			if (await user.comparePassword(password)) {
-				const { accessToken, refreshToken } = generateTokens(user._id);
+				const { accessToken, refreshToken } = generateTokens(user);
 
 				// Đặt các token trong header
 				res.setHeader("Authorization", `Bearer ${accessToken}`);
